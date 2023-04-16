@@ -3,6 +3,7 @@ import random
 import numpy as np
 import torchvision as torchvision
 import torchvision.transforms as det_transforms
+from torchvision.utils import save_image
 from tqdm import tqdm
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -10,10 +11,8 @@ import torch
 from facenet_pytorch import MTCNN, InceptionResnetV1
 # torchsummary import summary
 from argparse import ArgumentParser
-import openpyxl
 from openpyxl import load_workbook
 
-from skimage import io
 
 # torch.manual_seed(42)
 from training.dataset_utils import Rescale
@@ -81,13 +80,16 @@ def get_rdm_thacher(dataset_paths_list_up, dataset_paths_list_inv, model):
     rdm = np.zeros(3)
     try:
         im_path = dataset_paths_list_up[0]
-        img = torchvision.io.read_image(im_path)
-        plt.imshow(img.permute(1, 2, 0))
+        img = Image.open(im_path)
+        img = mtcnn(img)
+
         img_embedding = model(img.unsqueeze(0).float())
+        #a = img.permute(1,2,0).numpy()
+        #save_image(a, 'C:/Users/tamarak/Desktop/tamara_university/psycology_seminar/results/thatcherResults/images/0')
 
         second_im_path = dataset_paths_list_up[1]
-        second_img = torchvision.io.read_image(second_im_path)
-        plt.imshow(second_img.permute(1, 2, 0))
+        second_img = Image.open(second_im_path)
+        second_img = mtcnn(second_img)
         second_img_embedding = model(second_img.unsqueeze(0).float())
 
         rdm[0] = cos(img_embedding, second_img_embedding)
@@ -96,13 +98,18 @@ def get_rdm_thacher(dataset_paths_list_up, dataset_paths_list_inv, model):
 
     try:
         im_path = dataset_paths_list_inv[0]
-        img = torchvision.io.read_image(im_path)
-        plt.imshow(img.permute(1, 2, 0))
+        img = Image.open(im_path)
+        img = mtcnn(img)
+        img = torch.rot90(img, 2)
+
         img_embedding = model(img.unsqueeze(0).float())
+        #a = img.permute(1,2,0).numpy()
+        #save_image(a, 'C:/Users/tamarak/Desktop/tamara_university/psycology_seminar/results/thatcherResults/images/1')
 
         second_im_path = dataset_paths_list_inv[1]
-        second_img = torchvision.io.read_image(second_im_path)
-        plt.imshow(second_img.permute(1, 2, 0))
+        second_img = Image.open(second_im_path)
+        second_img = mtcnn(second_img)
+        second_img = torch.rot90(second_img, 2)
         second_img_embedding = model(second_img.unsqueeze(0).float())
 
         rdm[1] = cos(img_embedding, second_img_embedding)
@@ -142,7 +149,7 @@ def get_rdm(dataset_paths_list, model):
 
 def thatcher_test(folder_path, model):
     row_indx = 2
-    out = load_workbook("C:/Users/ynaho/PycharmProjects/galit_project/out_sheet.xlsx")
+    out = load_workbook("C:/Users/tamarak/Desktop/tamara_university/psycology_seminar/results/thatcherResults/out_sheet.xlsx")
     thatcher_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
         data_paths_list_up, data_paths_list_inv = load_data_for_thacher(class_path, 0)
@@ -155,7 +162,7 @@ def thatcher_test(folder_path, model):
         thatcher_results_sheet.cell(row=row_indx, column=6).value = rdm[1]
         thatcher_results_sheet.cell(row=row_indx, column=7).value = rdm[2]
         row_indx += 1
-    out.save("C:/Users/ynaho/PycharmProjects/galit_project/out_sheet.xlsx")
+    out.save("C:/Users/tamarak/Desktop/tamara_university/psycology_seminar/results/thatcherResults/out_sheet.xlsx")
 
 
 if __name__ == '__main__':
