@@ -83,13 +83,7 @@ def load_data_for_thacher(data_dir):
 
 
 def load_data_for_context_test(data_dir):
-    data_paths_list = []
-    celebrities = os.listdir(data_dir)
-    for celebrity_folder in celebrities:
-        celebrity_folder_path = os.path.join(data_dir, celebrity_folder)
-        data_paths_list.append(celebrity_folder_path)
-
-    return data_paths_list
+    return context_test
 
 
 def get_context_test_results(dataset_paths_list, model):
@@ -203,7 +197,7 @@ def thatcher_test(folder_path, model):
 
 def context_test(folder_path, model):
     row_indx = 2
-    out = load_workbook("C:/Users/ynaho/PycharmProjects/galit_project/context_out_sheet.xlsx")
+    out = load_workbook("context_out_sheet.xlsx")
     context_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
         rdm = get_context_test_results(class_path, model)
@@ -213,7 +207,7 @@ def context_test(folder_path, model):
         context_results_sheet.cell(row=row_indx, column=4).value = rdm[1]
         context_results_sheet.cell(row=row_indx, column=5).value = rdm[2]
         row_indx += 1
-    out.save("C:/Users/ynaho/PycharmProjects/galit_project/context_out_sheet.xlsx")
+    out.save("context_out_sheet.xlsx")
 
 
 if __name__ == '__main__':
