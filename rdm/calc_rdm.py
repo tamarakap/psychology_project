@@ -34,7 +34,8 @@ vgg_model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg16', pretrained=True)
 
 def get_resnet_model(pretrain='vggface2'):
     # options are: vggface2, casia-webface https://github.com/timesler/facenet-pytorch
-    model = InceptionResnetV1(pretrained=pretrain).eval()
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg16', pretrained=True)
+    #model = InceptionResnetV1(pretrained=pretrain).eval()
     return model
 
 
@@ -53,10 +54,14 @@ def calculate_thacher_index(dif_up, dif_inv):
 
 def get_image_embedding(img_path, model, rotate=False):
     img = Image.open(img_path)
-    # img.show()
+    img.show()
     img = mtcnn(img)
     if rotate:
         img = torch.rot90(img, 2)
+
+    # array = np.array(img)
+    # img_tmp = Image.fromarray(np.uint8(array))
+    # img_tmp.show()
     return model(img.unsqueeze(0).float())
 
 
@@ -82,23 +87,22 @@ def load_data_for_context_test():
 
 
 def get_context_test_results(dataset_paths_list, model):
-    rdm = np.zeros(3)
+    rdm = np.zeros(2)
     dataset_paths_list = os.path.join(celebrities_folder_path, dataset_paths_list)
     imgs = os.listdir(dataset_paths_list)
-    # try:
-    img_path1 = os.path.join(dataset_paths_list, imgs[0])
-    img_path2 = os.path.join(dataset_paths_list, imgs[1])
-    img_path3 = os.path.join(dataset_paths_list, imgs[2])
+    try:
+        regular_img = os.path.join(dataset_paths_list, imgs[0])
+        conext_img = os.path.join(dataset_paths_list, imgs[1])
+        out_of_context_img = os.path.join(dataset_paths_list, imgs[2])
 
-    img_embedding1 = get_image_embedding(img_path1, model)
-    img_embedding2 = get_image_embedding(img_path2, model)
-    img_embedding3 = get_image_embedding(img_path3, model)
+        regular_img_embedding = get_image_embedding(regular_img, model)
+        conext_img_embedding = get_image_embedding(conext_img, model)
+        out_of_context_img_embedding = get_image_embedding(out_of_context_img, model)
 
-    rdm[0] = cos(img_embedding1, img_embedding2)
-    rdm[1] = cos(img_embedding2, img_embedding3)
-    rdm[2] = cos(img_embedding1, img_embedding3)
-    # except:
-    print(f'error calculating similarity')
+        rdm[0] = cos(regular_img_embedding, conext_img_embedding)
+        rdm[1] = cos(regular_img_embedding, out_of_context_img_embedding)
+    except:
+        print(f'error calculating similarity')
     return rdm
 
 
@@ -111,7 +115,7 @@ def get_rdm_thacher(dataset_paths_list_up, dataset_paths_list_inv, model):
         img_embedding1 = get_image_embedding(img_path1, model)
         img_embedding2 = get_image_embedding(img_path2, model)
 
-        rdm[0] = cos(img_embedding1, img_embedding2)
+        rdm[0] = torch.cdist(img_embedding1, img_embedding2, 2)#cos(img_embedding1, img_embedding2)
     except:
         print(f'error calculating similarity')
 
@@ -122,7 +126,8 @@ def get_rdm_thacher(dataset_paths_list_up, dataset_paths_list_inv, model):
         img_embedding1 = get_image_embedding(img_path1, model, rotate=True)
         img_embedding2 = get_image_embedding(img_path2, model, rotate=True)
 
-        rdm[1] = cos(img_embedding1, img_embedding2)
+        rdm[1] = torch.cdist(img_embedding1, img_embedding2, 2) #cos(img_embedding1, img_embedding2)
+        #dist = (img_embedding1 - img_embedding2).pow(2).sum(3).sqrt()
     except:
         print(f'error calculating similarity')
     rdm[2] = calculate_thacher_index(rdm[0], rdm[1])
@@ -155,7 +160,6 @@ def context_test(folder_path, model):
         rdm = get_context_test_results(class_path, model)
         context_results_sheet.cell(row=row_indx, column=1).value = rdm[0]
         context_results_sheet.cell(row=row_indx, column=2).value = rdm[1]
-        context_results_sheet.cell(row=row_indx, column=3).value = rdm[2]
         row_indx += 1
     out.save(context_output_path)
 
