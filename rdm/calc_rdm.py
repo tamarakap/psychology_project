@@ -11,41 +11,26 @@ from facenet_pytorch import MTCNN, InceptionResnetV1
 from argparse import ArgumentParser
 from openpyxl import load_workbook
 
-# torch.manual_seed(42)
-from training.dataset_utils import Rescale
-
-cos = torch.nn.CosineSimilarity()
-mtcnn = MTCNN(image_size=160)
-from facenet_pytorch import InceptionResnetV1
-
 my_path = os.path.abspath(os.path.dirname(__file__))
 context_output_path = os.path.join(my_path, "../outputs/context_out_sheet.xlsx")
 thatcher_output_path = os.path.join(my_path, "../outputs/thatcher_out_sheet.xlsx")
 celebrities_folder_path = os.path.join(my_path, "../celebrities_for_context_test")
 thatcher_images_path = os.path.join(my_path, "../img_by_identity")
+import torch
+from facenet_pytorch import MTCNN, InceptionResnetV1
+from torchvision import transforms
+from training.dataset_utils import Rescale
 
-normalize = det_transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-composed_transforms = det_transforms.Compose([Rescale((160, 160)), normalize])
+mtcnn = MTCNN(image_size=160)
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+composed_transforms = transforms.Compose([Rescale((160, 160)), normalize])
+cos = torch.nn.CosineSimilarity()
 
-vgg_model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg16', pretrained=True)
 
-
-# resnet_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet101', pretrained=True)
-
-def get_resnet_model(pretrain='vggface2'):
+def get_vgg_model(pretrain='vggface2'):
     # options are: vggface2, casia-webface https://github.com/timesler/facenet-pytorch
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg16', pretrained=True)
-    #model = InceptionResnetV1(pretrained=pretrain).eval()
+    model = InceptionResnetV1(pretrained=pretrain).eval()
     return model
-
-
-"""
-def get_vgg_model(num_classes):
-    model = vgg_model
-    #model.fc = nn.Linear(in_features = 2048, out_features=num_classes+1, bias = True)
-    model.classifier[6] = nn.Linear(in_features = 4096, out_features=num_classes+1, bias = True)
-    return model
-"""
 
 
 def calculate_thacher_index(dif_up, dif_inv):
@@ -54,14 +39,15 @@ def calculate_thacher_index(dif_up, dif_inv):
 
 def get_image_embedding(img_path, model, rotate=False):
     img = Image.open(img_path)
-    img.show()
+    #img.show()
     img = mtcnn(img)
     if rotate:
+        img = img.permute(1, 2, 0)  # change tensor shape to HxWxC
         img = torch.rot90(img, 2)
+        img = img.permute(2, 0, 1)
 
-    # array = np.array(img)
-    # img_tmp = Image.fromarray(np.uint8(array))
-    # img_tmp.show()
+    #plt.imshow(img.permute(1,2,0))
+    #plt.show()
     return model(img.unsqueeze(0).float())
 
 
@@ -115,13 +101,13 @@ def get_rdm_thacher(dataset_paths_list_up, dataset_paths_list_inv, model):
         img_embedding1 = get_image_embedding(img_path1, model)
         img_embedding2 = get_image_embedding(img_path2, model)
 
-        rdm[0] = torch.cdist(img_embedding1, img_embedding2, 2)#cos(img_embedding1, img_embedding2)
+        rdm[0] = torch.cdist(img_embedding1, img_embedding2, 2, compute_mode='use_mm_for_euclid_dist_if_necessary')#cos(img_embedding1, img_embedding2)
     except:
         print(f'error calculating similarity')
 
     try:
-        img_path1 = dataset_paths_list_inv[0]
-        img_path2 = dataset_paths_list_inv[1]
+        img_path1 = dataset_paths_list_up[0]
+        img_path2 = dataset_paths_list_up[1]
 
         img_embedding1 = get_image_embedding(img_path1, model, rotate=True)
         img_embedding2 = get_image_embedding(img_path2, model, rotate=True)
@@ -171,7 +157,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-test_type", "--test_type", dest="test_type", help="The type of test to perform")
     args = parser.parse_args()
-    model = get_resnet_model()
+    model = get_vgg_model()
     if args.test_type == "thatcher":
         thatcher_test(os.listdir(thatcher_images_path), model)
     elif args.test_type == "context":
