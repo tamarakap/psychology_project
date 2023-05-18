@@ -14,12 +14,17 @@ from argparse import ArgumentParser
 from openpyxl import load_workbook
 
 my_path = os.path.abspath(os.path.dirname(__file__))
-context_output_path = os.path.join(my_path, "../outputs/context_out_sheet.xlsx")
-thatcher_output_path = os.path.join(my_path, "../outputs/thatcher_out_sheet.xlsx")
-occlusions_output_path = os.path.join(my_path, "../outputs/occlusions_out_sheet.xlsx")
-celebrities_folder_path = os.path.join(my_path, "../celebrities_for_context_test")
-thatcher_images_path = os.path.join(my_path, "../img_by_identity")
-occlusions_folder_path = os.path.join(my_path, "../occlusions")
+context_output_path_clip = os.path.join(my_path, "..\outputs\context_out_sheet_clip.xlsx")
+context_output_path_vgg = os.path.join(my_path, "..\outputs\context_out_sheet_vgg.xlsx")
+thatcher_output_path_clip = os.path.join(my_path, "..\outputs\\thatcher_out_sheet_clip.xlsx")
+thatcher_output_path_vgg = os.path.join(my_path, "..\outputs\\thatcher_out_sheet_vgg.xlsx")
+occlusions_output_path_clip = os.path.join(my_path, "..\outputs\occlusions_out_sheet_clip.xlsx")
+occlusions_output_path_vgg = os.path.join(my_path, "..\outputs\occlusions_out_sheet_vgg.xlsx")
+
+
+celebrities_folder_path = os.path.join(my_path, "..\celebrities_for_context_test")
+thatcher_images_path = os.path.join(my_path, "..\img_by_identity")
+occlusions_folder_path = os.path.join(my_path, "..\occlusions")
 import torch
 from facenet_pytorch import MTCNN, InceptionResnetV1
 from torchvision import transforms
@@ -29,7 +34,6 @@ mtcnn = MTCNN(image_size=160)
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 composed_transforms = transforms.Compose([Rescale((160, 160)), normalize])
 cos = torch.nn.CosineSimilarity()
-
 
 
 def get_vgg_model(pretrain='vggface2'):
@@ -60,7 +64,7 @@ def get_image_embedding(img_path, model, rotate=False, network_type="vgg", prepr
         std = torch.tensor([0.229, 0.224, 0.225])
 
         img = Image.open(img_path)
-        #normalize
+        # normalize
         img = img.to(torch.float32) / 255.0
         img = (img - mean.view(3, 1, 1)) / std.view(3, 1, 1)
         img = mtcnn(img)
@@ -89,7 +93,7 @@ def load_data_for_thacher(data_dir):
     for img in imgs[:2]:
         im_path = os.path.join(data_dir, img)
         data_paths_list_up.append(im_path)
-    #for img in imgs[2:]:
+    # for img in imgs[2:]:
     #    im_path = os.path.join(data_dir, img)
     #    data_paths_list_inv.append(im_path)
 
@@ -103,13 +107,12 @@ def load_data_for_context_test():
 def load_data_for_occlusions_test():
     return os.listdir(occlusions_folder_path)
 
+
 def get_dataset_path(dataset_paths_list):
     if args.test_type == "context":
         return os.path.join(celebrities_folder_path, dataset_paths_list)
     else:
         return os.path.join(occlusions_folder_path, dataset_paths_list)
-
-
 
 
 def get_context_test_results(dataset_paths_list, model, network_type, preprocess):
@@ -121,9 +124,11 @@ def get_context_test_results(dataset_paths_list, model, network_type, preprocess
         conext_img = os.path.join(dataset_paths_list, imgs[1])
         out_of_context_img = os.path.join(dataset_paths_list, imgs[2])
 
-        regular_img_embedding = get_image_embedding(regular_img, model, network_type=network_type, preprocess=preprocess)
+        regular_img_embedding = get_image_embedding(regular_img, model, network_type=network_type,
+                                                    preprocess=preprocess)
         conext_img_embedding = get_image_embedding(conext_img, model, network_type=network_type, preprocess=preprocess)
-        out_of_context_img_embedding = get_image_embedding(out_of_context_img, model, network_type=network_type, preprocess=preprocess)
+        out_of_context_img_embedding = get_image_embedding(out_of_context_img, model, network_type=network_type,
+                                                           preprocess=preprocess)
 
         rdm[0] = cos(regular_img_embedding, conext_img_embedding)
         rdm[1] = cos(regular_img_embedding, out_of_context_img_embedding)
@@ -141,26 +146,27 @@ def get_thacher_results(dataset_paths_list_up, model, network_type, preprocess):
     img_embedding1 = get_image_embedding(img_path1, model, network_type=network_type, preprocess=preprocess)
     img_embedding2 = get_image_embedding(img_path2, model, network_type=network_type, preprocess=preprocess)
 
-    #verify cdist
+    # verify cdist
     results[0] = torch.cdist(img_embedding1, img_embedding2, 2,
-                         compute_mode='use_mm_for_euclid_dist_if_necessary')
+                             compute_mode='use_mm_for_euclid_dist_if_necessary')
 
     img_path1 = dataset_paths_list_up[0]
     img_path2 = dataset_paths_list_up[1]
-    img_embedding1 = get_image_embedding(img_path1, model, rotate=True, network_type=network_type, preprocess=preprocess)
-    img_embedding2 = get_image_embedding(img_path2, model, rotate=True, network_type=network_type, preprocess=preprocess)
+    img_embedding1 = get_image_embedding(img_path1, model, rotate=True, network_type=network_type,
+                                         preprocess=preprocess)
+    img_embedding2 = get_image_embedding(img_path2, model, rotate=True, network_type=network_type,
+                                         preprocess=preprocess)
 
     results[1] = torch.cdist(img_embedding1, img_embedding2, 2)
     results[2] = calculate_thacher_index(results[0], results[1])
-
-
 
     return results
 
 
 def thatcher_test(folder_path, model, network_type, preprocess):
     row_indx = 2
-    out = load_workbook(thatcher_output_path)
+    thatcher_path = thatcher_output_path_vgg if network_type == "vgg" else thatcher_output_path_clip
+    out = load_workbook(thatcher_path)
     thatcher_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
         data_paths_list_up = load_data_for_thacher(class_path)
@@ -173,31 +179,33 @@ def thatcher_test(folder_path, model, network_type, preprocess):
         thatcher_results_sheet.cell(row=row_indx, column=6).value = results[1]
         thatcher_results_sheet.cell(row=row_indx, column=7).value = results[2]
         row_indx += 1
-    out.save(thatcher_output_path)
+    out.save(thatcher_path)
 
 
 def context_test(folder_path, model, network_type, preprocess):
     row_indx = 2
-    out = load_workbook(context_output_path)
+    context_path = context_output_path_vgg if network_type == "vgg" else context_output_path_clip
+    out = load_workbook(context_path)
     context_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
         context_results = get_context_test_results(class_path, model, network_type, preprocess)
         context_results_sheet.cell(row=row_indx, column=1).value = context_results[0]
         context_results_sheet.cell(row=row_indx, column=2).value = context_results[1]
         row_indx += 1
-    out.save(context_output_path)
+    out.save(context_path)
 
 
 def occlusions_test(folder_path, model, network_type, preprocess):
     row_indx = 2
-    out = load_workbook(occlusions_output_path)
+    occlusions_path = occlusions_output_path_vgg if network_type == "vgg" else occlusions_output_path_clip
+    out = load_workbook(occlusions_path)
     context_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
         occlusions_results = get_context_test_results(class_path, model, network_type, preprocess)
         context_results_sheet.cell(row=row_indx, column=1).value = occlusions_results[0]
         context_results_sheet.cell(row=row_indx, column=2).value = occlusions_results[1]
         row_indx += 1
-    out.save(occlusions_output_path)
+    out.save(occlusions_path)
 
 
 # just paste this as running configuration:
@@ -212,7 +220,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     model, preprocess = get_model(args.network_type)
 
-    #resize images!
+    # resize images!
     if args.test_type == "thatcher":
         thatcher_test(os.listdir(thatcher_images_path), model, args.network_type, preprocess)
 
