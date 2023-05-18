@@ -7,6 +7,7 @@ import torchvision
 import torchvision.transforms as det_transforms
 from tqdm import tqdm
 from PIL import Image
+import matplotlib.pyplot as plt
 import clip
 import torch
 from facenet_pytorch import MTCNN, InceptionResnetV1
@@ -74,14 +75,32 @@ def get_image_embedding(img_path, model, rotate=False, network_type="vgg", prepr
             img = img.permute(2, 0, 1)
         return model(img.unsqueeze(0).float())
 
-    elif network_type == "clip":
-        image = preprocess(Image.open("CLIP.png")).unsqueeze(0).to(args.device)
-        with torch.no_grad():
-            image_features = model.encode_image(image)
-        return image_features
 
-    else:
-        raise Exception("wrong network type was given!")
+
+    elif network_type == "clip":
+
+        img = Image.open(img_path)
+
+        # Check the condition for rotation
+
+        if rotate:
+            img = img.rotate(180)
+
+        image = preprocess(img).unsqueeze(0).to(args.device)
+
+        with torch.no_grad():
+
+            image_features = model.encode_image(image)
+
+        # Display the image
+
+        plt.imshow(img)
+
+        plt.axis('off')
+
+        plt.show()
+
+        return image_features
 
 
 def load_data_for_thacher(data_dir):
@@ -93,11 +112,11 @@ def load_data_for_thacher(data_dir):
     for img in imgs[:2]:
         im_path = os.path.join(data_dir, img)
         data_paths_list_up.append(im_path)
-    # for img in imgs[2:]:
-    #    im_path = os.path.join(data_dir, img)
-    #    data_paths_list_inv.append(im_path)
+    for img in imgs[2:]:
+        im_path = os.path.join(data_dir, img)
+        data_paths_list_inv.append(im_path)
 
-    return data_paths_list_up
+    return data_paths_list_up, data_paths_list_inv
 
 
 def load_data_for_context_test():
@@ -119,25 +138,40 @@ def get_context_test_results(dataset_paths_list, model, network_type, preprocess
     rdm = np.zeros(2)
     dataset_paths_list = get_dataset_path(dataset_paths_list)
     imgs = os.listdir(dataset_paths_list)
-    try:
-        regular_img = os.path.join(dataset_paths_list, imgs[0])
-        conext_img = os.path.join(dataset_paths_list, imgs[1])
-        out_of_context_img = os.path.join(dataset_paths_list, imgs[2])
 
-        regular_img_embedding = get_image_embedding(regular_img, model, network_type=network_type,
-                                                    preprocess=preprocess)
-        conext_img_embedding = get_image_embedding(conext_img, model, network_type=network_type, preprocess=preprocess)
-        out_of_context_img_embedding = get_image_embedding(out_of_context_img, model, network_type=network_type,
-                                                           preprocess=preprocess)
+    bottom_cover = os.path.join(dataset_paths_list, imgs[0])
+    top_cover = os.path.join(dataset_paths_list, imgs[1])
+    regular = os.path.join(dataset_paths_list, imgs[2])
 
-        rdm[0] = cos(regular_img_embedding, conext_img_embedding)
-        rdm[1] = cos(regular_img_embedding, out_of_context_img_embedding)
-    except:
-        print(f'error calculating similarity')
+    regular_img_embedding = get_image_embedding(regular, model, network_type=network_type,
+                                                preprocess=preprocess)
+    top_cover_img_embedding = get_image_embedding(top_cover, model, network_type=network_type, preprocess=preprocess)
+    bottom_cover_img_embedding = get_image_embedding(bottom_cover, model, network_type=network_type,
+                                                       preprocess=preprocess)
+    rdm[0] = torch.cdist(regular_img_embedding, top_cover_img_embedding, 2)
+    rdm[1] = torch.cdist(regular_img_embedding, bottom_cover_img_embedding, 2)
+    return rdm
+
+def get_occlusions_test_results(dataset_paths_list, model, network_type, preprocess):
+    rdm = np.zeros(2)
+    dataset_paths_list = get_dataset_path(dataset_paths_list)
+    imgs = os.listdir(dataset_paths_list)
+
+    regular_img = os.path.join(dataset_paths_list, imgs[0])
+    conext_img = os.path.join(dataset_paths_list, imgs[1])
+    out_of_context_img = os.path.join(dataset_paths_list, imgs[2])
+
+    regular_img_embedding = get_image_embedding(regular_img, model, network_type=network_type,
+                                                preprocess=preprocess)
+    conext_img_embedding = get_image_embedding(conext_img, model, network_type=network_type, preprocess=preprocess)
+    out_of_context_img_embedding = get_image_embedding(out_of_context_img, model, network_type=network_type,
+                                                       preprocess=preprocess)
+    rdm[0] = torch.cdist(regular_img_embedding, conext_img_embedding, 2)
+    rdm[1] = torch.cdist(regular_img_embedding, out_of_context_img_embedding, 2)
     return rdm
 
 
-def get_thacher_results(dataset_paths_list_up, model, network_type, preprocess):
+def get_thacher_results(dataset_paths_list_up,data_paths_list_inv, model, network_type, preprocess):
     results = np.zeros(3)
 
     img_path1 = dataset_paths_list_up[0]
@@ -150,11 +184,11 @@ def get_thacher_results(dataset_paths_list_up, model, network_type, preprocess):
     results[0] = torch.cdist(img_embedding1, img_embedding2, 2,
                              compute_mode='use_mm_for_euclid_dist_if_necessary')
 
-    img_path1 = dataset_paths_list_up[0]
-    img_path2 = dataset_paths_list_up[1]
-    img_embedding1 = get_image_embedding(img_path1, model, rotate=True, network_type=network_type,
+    img_path_inv1 = data_paths_list_inv[0]
+    img_path_inv2 = data_paths_list_inv[1]
+    img_embedding1 = get_image_embedding(img_path_inv1, model, rotate=True, network_type=network_type,
                                          preprocess=preprocess)
-    img_embedding2 = get_image_embedding(img_path2, model, rotate=True, network_type=network_type,
+    img_embedding2 = get_image_embedding(img_path_inv2, model, rotate=True, network_type=network_type,
                                          preprocess=preprocess)
 
     results[1] = torch.cdist(img_embedding1, img_embedding2, 2)
@@ -169,12 +203,12 @@ def thatcher_test(folder_path, model, network_type, preprocess):
     out = load_workbook(thatcher_path)
     thatcher_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
-        data_paths_list_up = load_data_for_thacher(class_path)
-        results = get_thacher_results(data_paths_list_up, model, network_type, preprocess)
+        data_paths_list_up , data_paths_list_inv= load_data_for_thacher(class_path)
+        results = get_thacher_results(data_paths_list_up,data_paths_list_inv, model, network_type, preprocess)
         thatcher_results_sheet.cell(row=row_indx, column=1).value = data_paths_list_up[0].split('\\')[-1]
         thatcher_results_sheet.cell(row=row_indx, column=2).value = data_paths_list_up[1].split('\\')[-1]
-        thatcher_results_sheet.cell(row=row_indx, column=3).value = data_paths_list_up[0].split('\\')[-1] + ".inv"
-        thatcher_results_sheet.cell(row=row_indx, column=4).value = data_paths_list_up[1].split('\\')[-1] + ".inv"
+        thatcher_results_sheet.cell(row=row_indx, column=3).value = data_paths_list_inv[0].split('\\')[-1]
+        thatcher_results_sheet.cell(row=row_indx, column=4).value = data_paths_list_inv[1].split('\\')[-1]
         thatcher_results_sheet.cell(row=row_indx, column=5).value = results[0]
         thatcher_results_sheet.cell(row=row_indx, column=6).value = results[1]
         thatcher_results_sheet.cell(row=row_indx, column=7).value = results[2]
@@ -201,7 +235,7 @@ def occlusions_test(folder_path, model, network_type, preprocess):
     out = load_workbook(occlusions_path)
     context_results_sheet = out.active
     for i, class_path in tqdm(enumerate(folder_path)):
-        occlusions_results = get_context_test_results(class_path, model, network_type, preprocess)
+        occlusions_results = get_occlusions_test_results(class_path, model, network_type, preprocess)
         context_results_sheet.cell(row=row_indx, column=1).value = occlusions_results[0]
         context_results_sheet.cell(row=row_indx, column=2).value = occlusions_results[1]
         row_indx += 1
